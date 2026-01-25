@@ -1,0 +1,187 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7
+    container_name: shopsphere-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  # ---------------------------
+  # AUTH DATABASE (Postgres)
+  # ---------------------------
+  auth-db:
+    image: postgres:16
+    container_name: shopsphere-auth-db
+    environment:
+      - POSTGRES_DB=authdb
+      - POSTGRES_USER=authuser
+      - POSTGRES_PASSWORD=authpass
+    ports:
+      - "5435:5432"
+    volumes:
+      - auth_db_data:/var/lib/postgresql/data
+      - ./services/auth-service/src/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    restart: unless-stopped
+
+  # ---------------------------
+  # AUTH SERVICE
+  # ---------------------------
+  auth-service:
+    build: ./services/auth-service
+    container_name: shopsphere-auth
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - JWT_SECRET=supersecret
+      - DB_HOST=auth-db
+      - DB_PORT=5432
+      - DB_NAME=authdb
+      - DB_USER=authuser
+      - DB_PASSWORD=authpass
+    depends_on:
+      - auth-db
+    restart: unless-stopped
+
+  # ---------------------------
+  # CATALOG DATABASE (Postgres)
+  # ---------------------------
+  catalog-db:
+    image: postgres:16
+    container_name: shopsphere-catalog-db
+    environment:
+      - POSTGRES_DB=catalogdb
+      - POSTGRES_USER=cataloguser
+      - POSTGRES_PASSWORD=catalogpass
+    ports:
+      - "5433:5432"
+    volumes:
+      - catalog_db_data:/var/lib/postgresql/data
+      - ./services/catalog-service/src/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    restart: unless-stopped
+
+  # ---------------------------
+  # ORDER DATABASE (Postgres)
+  # ---------------------------
+  order-db:
+    image: postgres:16
+    container_name: shopsphere-order-db
+    environment:
+      - POSTGRES_DB=orderdb
+      - POSTGRES_USER=orderuser
+      - POSTGRES_PASSWORD=orderpass
+    ports:
+      - "5434:5432"
+    volumes:
+      - order_db_data:/var/lib/postgresql/data
+      - ./services/order-service/src/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    restart: unless-stopped
+
+  # ---------------------------
+  # SOLR
+  # ---------------------------
+  solr:
+    image: solr:9
+    container_name: shopsphere-solr
+    ports:
+      - "8983:8983"
+    command:
+      - solr-precreate
+      - products
+    volumes:
+      - solr_data:/var/solr
+    restart: unless-stopped
+
+  # ---------------------------
+  # CATALOG SERVICE
+  # ---------------------------
+  catalog-service:
+    build: ./services/catalog-service
+    container_name: shopsphere-catalog
+    ports:
+      - "3004:3002" # host:container
+    environment:
+      - PORT=3002
+      - JWT_SECRET=supersecret
+      - SOLR_URL=http://solr:8983/solr/products
+      - DB_HOST=catalog-db
+      - DB_PORT=5432
+      - DB_NAME=catalogdb
+      - DB_USER=cataloguser
+      - DB_PASSWORD=catalogpass
+    depends_on:
+      - solr
+      - catalog-db
+    restart: unless-stopped
+
+  # ---------------------------
+  # ORDER SERVICE
+  # ---------------------------
+  order-service:
+    build: ./services/order-service
+    container_name: shopsphere-orders
+    ports:
+      - "3003:3003"
+    environment:
+      - PORT=3003
+      - JWT_SECRET=supersecret
+      - DB_HOST=order-db
+      - DB_PORT=5432
+      - DB_NAME=orderdb
+      - DB_USER=orderuser
+      - DB_PASSWORD=orderpass
+    depends_on:
+      - order-db
+    restart: unless-stopped
+
+  # ---------------------------
+  # GATEWAY  
+  # ---------------------------
+  gateway:
+    build: ./gateway
+    container_name: shopsphere-gateway
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - REDIS_URL=redis://redis:6379
+      - CATALOG_URL=http://catalog-service:3002/api/v1
+      - ORDERS_URL=http://order-service:3003/api/v1
+      - AUTH_URL=http://auth-service:3001/api/v1
+    depends_on:
+      - catalog-service
+      - order-service
+      - auth-service
+      - redis
+    restart: unless-stopped
+
+  # ---------------------------
+  # PROMETHEUS + GRAFANA
+  # ---------------------------
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: shopsphere-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - gateway
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: shopsphere-grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  solr_data:
+  catalog_db_data:
+  order_db_data:
+  auth_db_data:

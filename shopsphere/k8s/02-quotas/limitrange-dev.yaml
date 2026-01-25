@@ -1,0 +1,23 @@
+# limitrange-dev.yaml
+# -------------------
+# PURPOSE:
+# Your dev ResourceQuota requires every Pod to define:
+# - requests.cpu / requests.memory
+# - limits.cpu / limits.memory
+#
+# A LimitRange sets DEFAULTS automatically, so every container
+# gets requests/limits even if we forget to add them in YAML.
+
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: dev-default-limits
+spec:
+  limits:
+    - type: Container
+      default:        # LIMITS (maximum a container can use)
+        cpu: "500m"
+        memory: "512Mi"
+      defaultRequest: # REQUESTS (reserved resources used for scheduling/quota)
+        cpu: "100m"
+        memory: "128Mi"

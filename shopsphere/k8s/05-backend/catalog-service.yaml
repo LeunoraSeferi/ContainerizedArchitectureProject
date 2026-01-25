@@ -1,0 +1,94 @@
+# catalog-service.yaml
+# --------------------
+# PURPOSE:
+# Deploy Catalog Service and expose it as "catalog-service".
+# It talks to:
+# - Postgres (catalog-db)
+# - Solr (solr)
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalog-service
+spec:
+  selector:
+    app: catalog-service
+  ports:
+    - name: http
+      port: 3002
+      targetPort: 3002
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalog-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: catalog-service
+  template:
+    metadata:
+      labels:
+        app: catalog-service
+    spec:
+      containers:
+        - name: catalog-service
+          image: shopsphere-catalog-service:latest
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - containerPort: 3002
+
+          env:
+            - name: PORT
+              value: "3002"
+
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: shopsphere-secrets
+                  key: JWT_SECRET
+
+            # Solr URL
+            - name: SOLR_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: shopsphere-config
+                  key: SOLR_URL
+
+            # DB env vars (match your Node code)
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: shopsphere-config
+                  key: CATALOG_DB_HOST
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: shopsphere-config
+                  key: CATALOG_DB_PORT
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: shopsphere-config
+                  key: CATALOG_DB_NAME
+            - name: DB_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: shopsphere-config
+                  key: CATALOG_DB_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: shopsphere-secrets
+                  key: CATALOG_DB_PASSWORD
+
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "512Mi"

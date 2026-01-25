@@ -1,0 +1,85 @@
+# order-service.yaml
+# ------------------
+# PURPOSE:
+# Deploy Order Service and expose it as "order-service".
+# It talks to Postgres (order-db).
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-service
+spec:
+  selector:
+    app: order-service
+  ports:
+    - name: http
+      port: 3003
+      targetPort: 3003
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: order-service
+  template:
+    metadata:
+      labels:
+        app: order-service
+    spec:
+      containers:
+        - name: order-service
+          image: shopsphere-order-service:latest
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - containerPort: 3003
+
+          env:
+            - name: PORT
+              value: "3003"
+
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: shopsphere-secrets
+                  key: JWT_SECRET
+
+            # DB env vars (match your Node code)
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: shopsphere-config
+                  key: ORDER_DB_HOST
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: shopsphere-config
+                  key: ORDER_DB_PORT
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: shopsphere-config
+                  key: ORDER_DB_NAME
+            - name: DB_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: shopsphere-config
+                  key: ORDER_DB_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: shopsphere-secrets
+                  key: ORDER_DB_PASSWORD
+
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "512Mi"

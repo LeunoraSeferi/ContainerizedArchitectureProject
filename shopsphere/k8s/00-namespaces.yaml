@@ -1,0 +1,22 @@
+# 00-namespaces.yaml
+# -----------------
+# PURPOSE:
+# We create 3 isolated environments:
+# - dev: development (smaller, no HPA)
+# - staging: stable environment (mirror production)
+# - prod: production (mirror staging)
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dev
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: staging
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: prod

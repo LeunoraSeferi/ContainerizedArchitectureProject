@@ -1,0 +1,86 @@
+# auth-service.yaml
+# -----------------
+# PURPOSE:
+# Deploy Auth Service as a Deployment (stateless).
+# Expose it inside the cluster with a Service name "auth-service".
+# Other services can call: http://auth-service:3001
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service
+spec:
+  selector:
+    app: auth-service
+  ports:
+    - name: http
+      port: 3001
+      targetPort: 3001
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: auth-service
+  template:
+    metadata:
+      labels:
+        app: auth-service
+    spec:
+      containers:
+        - name: auth-service
+          image: shopsphere-auth-service:latest
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - containerPort: 3001
+              name: http
+
+          env:
+            - name: PORT
+              value: "3001"
+
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: shopsphere-secrets
+                  key: JWT_SECRET
+
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: shopsphere-config
+                  key: AUTH_DB_HOST
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: shopsphere-config
+                  key: AUTH_DB_PORT
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: shopsphere-config
+                  key: AUTH_DB_NAME
+            - name: DB_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: shopsphere-config
+                  key: AUTH_DB_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: shopsphere-secrets
+                  key: AUTH_DB_PASSWORD
+
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "128Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"

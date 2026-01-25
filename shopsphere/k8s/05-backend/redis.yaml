@@ -1,0 +1,51 @@
+# redis.yaml
+# ----------
+# PURPOSE:
+# Redis is used for caching (performance requirement).
+# We deploy it as a Deployment (stateless for this project).
+# The Service name "redis" becomes the DNS name inside cluster:
+#   redis://redis:6379
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+spec:
+  # This selector must match the pod labels below
+  selector:
+    app: redis
+  ports:
+    - name: redis
+      port: 6379        # service port inside cluster
+      targetPort: 6379  # container port
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7
+          ports:
+            - containerPort: 6379
+
+          # IMPORTANT:
+          # You have ResourceQuota in dev, so every container must have requests/limits.
+          resources:
+            requests:
+              cpu: "25m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"

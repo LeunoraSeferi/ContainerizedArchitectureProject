@@ -1,0 +1,79 @@
+# gateway.yaml
+# ------------
+# PURPOSE:
+# Gateway is the single entrypoint for the backend.
+# It calls internal services using cluster DNS names:
+# - auth-service
+# - catalog-service
+# - order-service
+# It also uses Redis for caching/rate-limit logic.
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+spec:
+  selector:
+    app: gateway
+  ports:
+    - name: http
+      port: 4000
+      targetPort: 4000
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gateway
+  template:
+    metadata:
+      labels:
+        app: gateway
+    spec:
+      containers:
+        - name: gateway
+          image: shopsphere-gateway:latest
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - containerPort: 4000
+
+          env:
+            - name: PORT
+              value: "4000"
+
+            # URLs from ConfigMap (keeps YAML clean)
+            - name: REDIS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: shopsphere-config
+                  key: REDIS_URL
+
+            - name: AUTH_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: shopsphere-config
+                  key: AUTH_URL
+            - name: CATALOG_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: shopsphere-config
+                  key: CATALOG_URL
+            - name: ORDERS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: shopsphere-config
+                  key: ORDERS_URL
+
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "512Mi"
