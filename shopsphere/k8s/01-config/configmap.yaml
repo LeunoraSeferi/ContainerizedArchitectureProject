@@ -1,9 +1,6 @@
-#ConfigMap = non-secret configuration (URLs, hostnames, ports)
-#Secret = sensitive values (passwords, JWT secret)
-# configmap.yaml
-# --------------
+# ConfigMap = non-secret configuration (URLs, hostnames, ports)
 # PURPOSE:
-# Store non-sensitive config values used by services.
+# Stores non-sensitive configuration values used by services.
 # These values are injected into Pods as environment variables.
 
 apiVersion: v1
