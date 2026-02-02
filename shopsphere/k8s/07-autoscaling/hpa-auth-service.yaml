@@ -1,0 +1,34 @@
+# HPA for auth-service
+# PURPOSE:
+# Automatically scales auth-service pods based on CPU utilization.
+# We DO NOT apply HPA in dev (rubric rule).
+# We apply HPA in staging and production after deployments exist.
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: auth-service-hpa
+spec:
+  # This HPA targets the Deployment named "auth-service"
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: auth-service
+
+  # Rubric rule:
+  # staging & production must have at least 3 pods per deployment.
+  # So minReplicas must be 3 (never scale below 3).
+  minReplicas: 3
+
+  # STAGING max (we will use: max=6 in staging)
+  # In production we will use the SAME file structure but max=10.
+  maxReplicas: 6
+
+  metrics:
+    # Scale based on average CPU utilization across pods
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

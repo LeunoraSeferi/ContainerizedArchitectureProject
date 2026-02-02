@@ -1,22 +1,20 @@
-# auth-db.yaml
-# ------------
+# order-db.yaml
+# -------------
 # PURPOSE:
-# Deploy Auth Postgres database with:
-# - Service: stable DNS name "auth-db" for DB_HOST=auth-db
-# - StatefulSet: stable identity (auth-db-0)
-# - PVC: persistent storage
+# Deploy Order Postgres DB with:
+# - Service name "order-db" (DB_HOST=order-db)
+# - StatefulSet + PVC for persistent storage
 #
 # IMPORTANT:
-# dev namespace has ResourceQuota -> every container MUST have resources.
-# Keep CPU small so 3 DBs can fit inside limits.cpu=1
+# Must fit within dev quota CPU limits.
 
 apiVersion: v1
 kind: Service
 metadata:
-  name: auth-db
+  name: order-db
 spec:
   selector:
-    app: auth-db
+    app: order-db
   ports:
     - name: postgres
       port: 5432
@@ -26,17 +24,17 @@ spec:
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: auth-db
+  name: order-db
 spec:
-  serviceName: auth-db
+  serviceName: order-db
   replicas: 1
   selector:
     matchLabels:
-      app: auth-db
+      app: order-db
   template:
     metadata:
       labels:
-        app: auth-db
+        app: order-db
     spec:
       containers:
         - name: postgres
@@ -50,19 +48,19 @@ spec:
               valueFrom:
                 configMapKeyRef:
                   name: shopsphere-config
-                  key: AUTH_DB_NAME
+                  key: ORDER_DB_NAME
             - name: POSTGRES_USER
               valueFrom:
                 configMapKeyRef:
                   name: shopsphere-config
-                  key: AUTH_DB_USER
+                  key: ORDER_DB_USER
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: shopsphere-secrets
-                  key: AUTH_DB_PASSWORD
+                  key: ORDER_DB_PASSWORD
 
-          # small resource values (3 DBs fit under 1 CPU)
+        
           resources:
             requests:
               cpu: "50m"
@@ -72,7 +70,7 @@ spec:
               memory: "320Mi"
 
           volumeMounts:
-            - name: auth-db-data
+            - name: order-db-data
               mountPath: /var/lib/postgresql/data
 
           readinessProbe:
@@ -89,7 +87,7 @@ spec:
 
   volumeClaimTemplates:
     - metadata:
-        name: auth-db-data
+        name: order-db-data
       spec:
         accessModes: ["ReadWriteOnce"]
         storageClassName: standard

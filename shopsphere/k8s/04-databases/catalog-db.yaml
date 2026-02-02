@@ -1,20 +1,20 @@
-# catalog-db.yaml
-# ---------------
+# order-db.yaml
+# -------------
 # PURPOSE:
-# Deploy Catalog Postgres DB with:
-# - Service name "catalog-db" (DB_HOST=catalog-db)
+# Deploy Order Postgres DB with:
+# - Service name "order-db" (DB_HOST=order-db)
 # - StatefulSet + PVC for persistent storage
 #
 # IMPORTANT:
-# dev quota requires resources + keeps CPU under limits.cpu=1
+# Must fit within dev quota CPU limits.
 
 apiVersion: v1
 kind: Service
 metadata:
-  name: catalog-db
+  name: order-db
 spec:
   selector:
-    app: catalog-db
+    app: order-db
   ports:
     - name: postgres
       port: 5432
@@ -24,17 +24,17 @@ spec:
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: catalog-db
+  name: order-db
 spec:
-  serviceName: catalog-db
+  serviceName: order-db
   replicas: 1
   selector:
     matchLabels:
-      app: catalog-db
+      app: order-db
   template:
     metadata:
       labels:
-        app: catalog-db
+        app: order-db
     spec:
       containers:
         - name: postgres
@@ -48,19 +48,19 @@ spec:
               valueFrom:
                 configMapKeyRef:
                   name: shopsphere-config
-                  key: CATALOG_DB_NAME
+                  key: ORDER_DB_NAME
             - name: POSTGRES_USER
               valueFrom:
                 configMapKeyRef:
                   name: shopsphere-config
-                  key: CATALOG_DB_USER
+                  key: ORDER_DB_USER
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: shopsphere-secrets
-                  key: CATALOG_DB_PASSWORD
+                  key: ORDER_DB_PASSWORD
 
-       
+        
           resources:
             requests:
               cpu: "50m"
@@ -70,7 +70,7 @@ spec:
               memory: "320Mi"
 
           volumeMounts:
-            - name: catalog-db-data
+            - name: order-db-data
               mountPath: /var/lib/postgresql/data
 
           readinessProbe:
@@ -87,7 +87,7 @@ spec:
 
   volumeClaimTemplates:
     - metadata:
-        name: catalog-db-data
+        name: order-db-data
       spec:
         accessModes: ["ReadWriteOnce"]
         storageClassName: standard
