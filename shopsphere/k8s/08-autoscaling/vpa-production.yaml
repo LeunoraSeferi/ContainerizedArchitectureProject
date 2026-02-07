@@ -1,0 +1,56 @@
+# vpa-production.yaml
+# ------------------
+# PURPOSE:
+# VPA in recommendation mode for PRODUCTION workloads.
+# updateMode: "Off" = recommendations only (no automatic changes / no pod restarts).
+
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: auth-service-vpa
+spec:
+  targetRef:
+    apiVersion: "apps/v1"
+    kind: Deployment
+    name: auth-service
+  updatePolicy:
+    updateMode: "Off"
+
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: catalog-service-vpa
+spec:
+  targetRef:
+    apiVersion: "apps/v1"
+    kind: Deployment
+    name: catalog-service
+  updatePolicy:
+    updateMode: "Off"
+
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: order-service-vpa
+spec:
+  targetRef:
+    apiVersion: "apps/v1"
+    kind: Deployment
+    name: order-service
+  updatePolicy:
+    updateMode: "Off"
+
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: gateway-vpa
+spec:
+  targetRef:
+    apiVersion: "apps/v1"
+    kind: Deployment
+    name: gateway
+  updatePolicy:
+    updateMode: "Off"
