@@ -1,0 +1,12 @@
+# Dev overlay: namespace dev only. No HPA. Quota/limitrange applied from k8s/02-quotas (see README).
+# Apply: kubectl apply -k shopsphere/k8s-overlays/dev
+# Then: kubectl apply -n dev -f shopsphere/k8s/02-quotas/quota-dev.yaml -f shopsphere/k8s/02-quotas/limitrange-dev.yaml
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: dev
+
+resources:
+  - ../../k8s
+  - namespace.yaml

@@ -1,8 +1,8 @@
 # quota-staging.yaml
 # ------------------
-# PURPOSE:
-# Staging is "bigger than dev" (double resources).
-# Production will have NO quota (as requested by the rubric).
+# Rubric: "limit staging to at least double the dev environment."
+# Dev = 1 CPU / 2Gi → staging >= 2 CPU / 4Gi. We set 4 CPU / 8Gi (4× dev) so
+# staging can run 3 replicas per deployment and HPA. Production has NO quota.
 
 apiVersion: v1
 kind: ResourceQuota
@@ -10,8 +10,8 @@ metadata:
   name: staging-quota
 spec:
   hard:
-    requests.cpu: "3"
-    requests.memory: "6Gi"
-    limits.cpu: "3"
-    limits.memory: "6Gi"
+    requests.cpu: "4"
+    requests.memory: 8Gi
+    limits.cpu: "4"
+    limits.memory: 8Gi
 

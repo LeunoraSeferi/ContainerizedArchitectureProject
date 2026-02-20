@@ -1,0 +1,20 @@
+# k8s/kustomization.yaml (BASE – references original folders only, no duplication)
+# Used by overlays in ../k8s-overlays/<env>. Do not apply this directly.
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - 01-config/configmap.yaml
+  - 01-config/secrets.yaml
+  - 03-pods/debug-pod.yaml
+  - 04-databases/auth-db.yaml
+  - 04-databases/catalog-db.yaml
+  - 04-databases/order-db.yaml
+  - 05-backend/redis.yaml
+  - 05-backend/solr.yaml
+  - 05-backend/gateway.yaml
+  - 05-backend/auth-service.yaml
+  - 05-backend/catalog-service.yaml
+  - 05-backend/order-service.yaml
+  - 06-frontend/shopsphere-frontend.yaml

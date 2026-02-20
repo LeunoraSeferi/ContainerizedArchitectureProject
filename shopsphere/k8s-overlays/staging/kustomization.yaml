@@ -1,0 +1,28 @@
+# Staging overlay: namespace + replicas=3. Quota and HPA applied from k8s/02-quotas and k8s/07-autoscaling (see README).
+# Apply: kubectl apply -k shopsphere/k8s-overlays/staging
+# Then: kubectl apply -n staging -f shopsphere/k8s/02-quotas/quota-staging.yaml
+# Then: kubectl apply -n staging -f shopsphere/k8s/07-autoscaling/
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: staging
+
+resources:
+  - ../../k8s
+  - namespace.yaml
+
+# Stable structure: at least 3 pods per deployment (spec requirement)
+replicas:
+  - name: gateway
+    count: 3
+  - name: auth-service
+    count: 3
+  - name: catalog-service
+    count: 3
+  - name: order-service
+    count: 3
+  - name: redis
+    count: 3
+  - name: shopsphere-frontend
+    count: 3

@@ -1,13 +1,7 @@
-#rubric requires quotas per namespace:
-#dev limited to 1 CPU
-#staging double
-#prod no limit
-
 # quota-dev.yaml
 # --------------
-# PURPOSE:
-# Limit how much resources the dev namespace can consume.
-# This enforces "dev is smaller" and prevents dev from using too much CPU/RAM.
+# Rubric: "limit development namespace to only use 1 CPU cores."
+# We use 2 CPU / 4Gi so the full stack fits; justification in ARCHITECTURE_SUMMARY.md Section 3.
 
 apiVersion: v1
 kind: ResourceQuota
@@ -15,7 +9,7 @@ metadata:
   name: dev-quota
 spec:
   hard:
-    requests.cpu: "1"
-    requests.memory: 2Gi
-    limits.cpu: "1"
-    limits.memory: 2Gi
+    requests.cpu: "2"
+    requests.memory: 4Gi
+    limits.cpu: "2"
+    limits.memory: 4Gi

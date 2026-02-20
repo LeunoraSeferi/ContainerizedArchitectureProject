@@ -60,7 +60,6 @@ spec:
                   name: shopsphere-secrets
                   key: ORDER_DB_PASSWORD
 
-        
           resources:
             requests:
               cpu: "50m"
@@ -76,14 +75,16 @@ spec:
           readinessProbe:
             exec:
               command: ["sh", "-c", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
-            initialDelaySeconds: 10
-            periodSeconds: 5
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
 
           livenessProbe:
             exec:
               command: ["sh", "-c", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
-            initialDelaySeconds: 30
-            periodSeconds: 10
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 5
 
   volumeClaimTemplates:
     - metadata:

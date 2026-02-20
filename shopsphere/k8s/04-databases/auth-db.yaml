@@ -1,20 +1,17 @@
-# order-db.yaml
+# auth-db.yaml
 # -------------
 # PURPOSE:
-# Deploy Order Postgres DB with:
-# - Service name "order-db" (DB_HOST=order-db)
+# Deploy Auth Postgres DB with:
+# - Service name "auth-db" (DB_HOST=auth-db)
 # - StatefulSet + PVC for persistent storage
-#
-# IMPORTANT:
-# Must fit within dev quota CPU limits.
 
 apiVersion: v1
 kind: Service
 metadata:
-  name: order-db
+  name: auth-db
 spec:
   selector:
-    app: order-db
+    app: auth-db
   ports:
     - name: postgres
       port: 5432
@@ -24,17 +21,17 @@ spec:
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: order-db
+  name: auth-db
 spec:
-  serviceName: order-db
+  serviceName: auth-db
   replicas: 1
   selector:
     matchLabels:
-      app: order-db
+      app: auth-db
   template:
     metadata:
       labels:
-        app: order-db
+        app: auth-db
     spec:
       containers:
         - name: postgres
@@ -48,19 +45,18 @@ spec:
               valueFrom:
                 configMapKeyRef:
                   name: shopsphere-config
-                  key: ORDER_DB_NAME
+                  key: AUTH_DB_NAME
             - name: POSTGRES_USER
               valueFrom:
                 configMapKeyRef:
                   name: shopsphere-config
-                  key: ORDER_DB_USER
+                  key: AUTH_DB_USER
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: shopsphere-secrets
-                  key: ORDER_DB_PASSWORD
+                  key: AUTH_DB_PASSWORD
 
-        
           resources:
             requests:
               cpu: "50m"
@@ -70,24 +66,26 @@ spec:
               memory: "320Mi"
 
           volumeMounts:
-            - name: order-db-data
+            - name: auth-db-data
               mountPath: /var/lib/postgresql/data
 
           readinessProbe:
             exec:
               command: ["sh", "-c", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
-            initialDelaySeconds: 10
-            periodSeconds: 5
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
 
           livenessProbe:
             exec:
               command: ["sh", "-c", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
-            initialDelaySeconds: 30
-            periodSeconds: 10
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 5
 
   volumeClaimTemplates:
     - metadata:
-        name: order-db-data
+        name: auth-db-data
       spec:
         accessModes: ["ReadWriteOnce"]
         storageClassName: standard
