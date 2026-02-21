@@ -35,7 +35,7 @@ spec:
     spec:
       containers:
         - name: catalog-service
-          image: shopsphere-catalog-service:latest
+          image: leunoraseferi/shopsphere-catalog-service:latest
           imagePullPolicy: IfNotPresent
 
           ports:

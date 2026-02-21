@@ -32,7 +32,7 @@ spec:
     spec:
       containers:
         - name: shopsphere-frontend
-          image: shopsphere-frontend:latest
+          image: leunoraseferi/shopsphere-frontend:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3000

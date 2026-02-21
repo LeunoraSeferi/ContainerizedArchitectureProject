@@ -34,7 +34,7 @@ spec:
     spec:
       containers:
         - name: auth-service
-          image: shopsphere-auth-service:latest
+          image: leunoraseferi/shopsphere-auth-service:latest
           imagePullPolicy: IfNotPresent
 
           ports:

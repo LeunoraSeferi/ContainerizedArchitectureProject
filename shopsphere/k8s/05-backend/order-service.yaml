@@ -33,7 +33,7 @@ spec:
     spec:
       containers:
         - name: order-service
-          image: shopsphere-order-service:latest
+          image: leunoraseferi/shopsphere-order-service:latest
           imagePullPolicy: IfNotPresent
 
           ports:
