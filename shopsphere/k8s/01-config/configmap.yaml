@@ -1,8 +1,9 @@
-# ConfigMap = non-secret configuration (URLs, hostnames, ports)
+# =========================================================
+# ConfigMap 1: shopsphere-config (NON-SECRET configuration)
 # PURPOSE:
-# Stores non-sensitive configuration values used by services.
-# These values are injected into Pods as environment variables.
-
+# Stores non-sensitive config values used by services.
+# Injected into Pods as environment variables.
+# =========================================================
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -34,3 +35,30 @@ data:
   ORDER_DB_PORT: "5432"
   ORDER_DB_NAME: "orderdb"
   ORDER_DB_USER: "orderuser"
+
+---
+# =========================================================
+# ConfigMap 2: auth-db-init (DB init SQL for PostgreSQL)
+# PURPOSE:
+# Fixes CrashLoopBackOff in auth-service by ensuring the
+# "users" table exists when Postgres starts for the first time.
+#
+# IMPORTANT:
+# This SQL runs ONLY on first initialization of the Postgres data dir.
+# If you already have a PVC with old data, you must delete that PVC
+# for auth-db so the init script runs.
+# =========================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: auth-db-init
+data:
+  auth-db-init.sql: |
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      email VARCHAR(255) UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      role VARCHAR(50) DEFAULT 'admin',
+      created_at TIMESTAMP DEFAULT NOW()
+    );

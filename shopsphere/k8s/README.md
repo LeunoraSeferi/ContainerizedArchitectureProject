@@ -94,6 +94,8 @@ Ensure images are built and loaded (Section 2) before applying. For staging/prod
 
 ## 4. Verification (run before submission)
 
+**Important:** For the full checklist you must have **all three environments** applied. If you only applied dev, run staging and prod now (Section 3). Then run the commands below.
+
 Run these from the repository root. Replace `<ns>` with `dev`, `staging`, or `prod` as applicable.
 
 **Namespaces:**
@@ -157,20 +159,24 @@ kubectl exec -it debug-curl -n dev -- curl -s http://gateway:4000/health
 # Expect HTTP 200 or a healthy JSON response.
 ```
 
-**Frontend in browser:**
+**Frontend in browser:**  
+The frontend JavaScript runs in the **browser** and calls the API at `localhost:4000` (or the URL it was built with). For that to work, the gateway must be reachable on that address. In a separate terminal, run:
+```bash
+kubectl port-forward -n dev svc/gateway 4000:4000
+```
+Keep it running. Then open the frontend:
 ```bash
 minikube service shopsphere-frontend -n dev
-# Open the URL; frontend → gateway → services flow should work.
 ```
+Login and API calls will go to localhost:4000 and be forwarded to the gateway. If you see "Login failed" or "ERR_CONNECTION_REFUSED" to localhost:4000, start the port-forward first and ensure auth-service is Running (see Troubleshooting).
 
 ---
 
 ## 5. Accessing the app and debug pod
 
-**Open frontend (dev):**
-```bash
-minikube service shopsphere-frontend -n dev
-```
+**Open frontend (dev):**  
+1. Start port-forward so the browser can reach the gateway: `kubectl port-forward -n dev svc/gateway 4000:4000` (leave running).  
+2. Then: `minikube service shopsphere-frontend -n dev`
 
 **Use debug-curl pod (applied with the overlay):**
 ```bash
@@ -194,7 +200,7 @@ kubectl exec -it debug-curl -n dev -- curl -s http://order-service:3003/health
 
 **PVCs stuck Pending:** Ensure the cluster has a default StorageClass (`kubectl get storageclass`). The manifests do not set `storageClassName`, so the default is used. Create or set a default StorageClass if none exists.
 
-**CrashLoopBackOff:** Check `kubectl logs -n <ns> deployment/<name>` (or the failing pod). Ensure ConfigMap `shopsphere-config` and Secret `shopsphere-secrets` exist in the namespace and that keys match the env references in the manifests.
+**CrashLoopBackOff (e.g. auth-service):** Run `kubectl logs -n dev deployment/auth-service --previous` (or the failing pod name) to see the exit reason. Common causes: (1) Cannot connect to DB – ensure auth-db pod is Running and ConfigMap keys (e.g. AUTH_DB_NAME) match what the app expects; (2) Missing or wrong Secret key – ensure `shopsphere-secrets` has AUTH_DB_PASSWORD and JWT_SECRET. Fix the cause, then delete the failing pod so it is recreated: `kubectl delete pod -n dev -l app=auth-service`.
 
 ---
 

@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: solr
+spec:
+  replicas: 1 
+  template:
+    spec:
+      containers:
+        - name: solr
+          env:
+            - name: SOLR_JAVA_MEM
+              value: "-Xms128m -Xmx128m"
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "200Mi"
+            limits:
+              cpu: "120m"
+              memory: "400Mi"

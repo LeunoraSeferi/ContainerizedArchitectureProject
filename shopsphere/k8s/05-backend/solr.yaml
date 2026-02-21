@@ -7,8 +7,9 @@
 # - StatefulSet + PVC: keep Solr index data persistent
 #
 # IMPORTANT:
-# Solr is Java-based. If we don't limit heap, it can OOM in small dev quotas.
-# SOLR_JAVA_MEM forces heap size to stay small.
+# Solr is Java-based.
+# We must control heap size AND container memory limits
+# to avoid OOMKilled in dev environment.
 
 apiVersion: v1
 kind: Service
@@ -42,23 +43,27 @@ spec:
         - name: solr
           image: solr:9
           args: ["solr-precreate", "products"]
+
           ports:
             - containerPort: 8983
               name: http
 
-          #  Force small heap (most important fix for OOMKilled)
+          #  Limit JVM heap explicitly
+          # 256m heap is safe for dev
           env:
             - name: SOLR_JAVA_MEM
-              value: "-Xms192m -Xmx192m"
+              value: "-Xms256m -Xmx256m"
 
-          #  Very small resources to fit dev quota (1 CPU / 2Gi total)
+          #  Balanced memory configuration
+          # Heap 256m + JVM overhead ~100–150m
+          # So container limit must be > 400Mi
           resources:
             requests:
-              cpu: "60m"
-              memory: "200Mi"
-            limits:
               cpu: "80m"
-              memory: "240Mi"
+              memory: "450Mi"
+            limits:
+              cpu: "200m"
+              memory: "650Mi"
 
           volumeMounts:
             - name: solr-data

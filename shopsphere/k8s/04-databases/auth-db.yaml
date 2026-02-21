@@ -4,6 +4,7 @@
 # Deploy Auth Postgres DB with:
 # - Service name "auth-db" (DB_HOST=auth-db)
 # - StatefulSet + PVC for persistent storage
+# - Init SQL (ConfigMap) to create required tables (users)
 
 apiVersion: v1
 kind: Service
@@ -69,6 +70,11 @@ spec:
             - name: auth-db-data
               mountPath: /var/lib/postgresql/data
 
+            # Mount init SQL into Postgres init directory
+            # Postgres executes any *.sql here ONLY on first init
+            - name: auth-db-init
+              mountPath: /docker-entrypoint-initdb.d
+
           readinessProbe:
             exec:
               command: ["sh", "-c", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
@@ -82,6 +88,15 @@ spec:
             initialDelaySeconds: 60
             periodSeconds: 15
             timeoutSeconds: 5
+
+      #  Volume from ConfigMap containing SQL script
+      volumes:
+        - name: auth-db-init
+          configMap:
+            name: auth-db-init
+            items:
+              - key: auth-db-init.sql
+                path: 01-auth-db-init.sql
 
   volumeClaimTemplates:
     - metadata:
