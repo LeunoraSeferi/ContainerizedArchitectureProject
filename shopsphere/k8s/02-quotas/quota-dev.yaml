@@ -1,7 +1,7 @@
 # quota-dev.yaml
 # --------------
-# Rubric: "limit development namespace to only use 1 CPU cores."
-# We use 2 CPU / 4Gi so the full stack fits; justification in ARCHITECTURE_SUMMARY.md Section 3.
+# Requirement 8: Dev namespace limited to 1 CPU and 2Gi.
+# All container limits in dev must sum to ≤ 1000m CPU and ≤ 2Gi memory.
 
 apiVersion: v1
 kind: ResourceQuota
@@ -9,7 +9,7 @@ metadata:
   name: dev-quota
 spec:
   hard:
-    requests.cpu: "2"
-    requests.memory: 4Gi
-    limits.cpu: "2"
-    limits.memory: 4Gi
+    requests.cpu: "1"
+    requests.memory: 2Gi
+    limits.cpu: "1"
+    limits.memory: 2Gi

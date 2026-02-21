@@ -59,11 +59,11 @@ spec:
 
           resources:
             requests:
-              cpu: "50m"
-              memory: "192Mi"
+              cpu: "60m"
+              memory: "150Mi"
             limits:
-              cpu: "100m"
-              memory: "320Mi"
+              cpu: "80m"
+              memory: "180Mi"
 
           volumeMounts:
             - name: catalog-db-data
@@ -88,7 +88,6 @@ spec:
         name: catalog-db-data
       spec:
         accessModes: ["ReadWriteOnce"]
-        storageClassName: standard
         resources:
           requests:
             storage: 1Gi

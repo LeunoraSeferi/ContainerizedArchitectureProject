@@ -1,39 +1,47 @@
-# Shopsphere – Kubernetes deployment runbook
+# Shopsphere – Kubernetes Deployment (Final Runbook)
 
-This document tells you how to run the Shopsphere app on Minikube from the YAML in this repo. Use it to reproduce the environment (dev / staging / prod) and test the application.
+This README describes how to deploy and verify the Shopsphere application on Kubernetes (Minikube). It is the main runbook for graders and for reproducing the three environments (dev, staging, prod).
+
+---
+
+## Submission 
+
+- **YAML:** All manifests used to generate the environments are under `shopsphere/k8s/` and `shopsphere/k8s-overlays/`. Prefer submitting a GitHub repository link; alternatively upload the contents of `shopsphere/k8s/` and `shopsphere/k8s-overlays/`.
+- **Images:** There are no pre-published images. Use **Section 2** (build + load into Minikube) or push images to Docker Hub and update `image:` in the manifests (see **Section 2 – Option B**).
+- **Diagram:** A diagram showing all components and their relationships (Deployments, Services, StatefulSets, Volumes, Autoscalers) is provided as `k8s/architecture-diagram.drawio` (open in draw.io). Export to PNG if required; the diagram may also be saved as `k8s/architecture-diagram.drawio.png`.
+- **Architecture summary:** Submit the required two-page summary describing the architecture and how the three environments are set up and isolated (see assignment instructions).
 
 ---
 
 ## 1. Prerequisites
 
 - **kubectl** installed and on your PATH.
-- **Minikube** (or Docker Desktop with Kubernetes). Example: `minikube start`.
+- **Minikube** (or another Kubernetes cluster). Example: `minikube start`.
 - **Metrics Server** (required for HPA in staging/prod):
   ```bash
   minikube addons enable metrics-server
   ```
-- **Optional – VPA (Vertical Pod Autoscaler):**  
-  If you want to apply the VPA YAML in staging/prod, install the VPA CRD and controller first (see [Troubleshooting](#6-troubleshooting)). If not, skip all files in `08-autoscaling/`.
+- **VPA (optional):** To apply VPA manifests in staging/prod, install the VPA CRD and controller first (see **Section 6 – Troubleshooting**). If not installed, do not apply files in `08-autoscaling/`.
 
-**Repository layout:** Assume you are at the **repository root** (the directory that contains `shopsphere/` and `shopsphere-frontend/`). All paths below are relative to that root.
+**Important:** Run all commands from the **repository root** (the directory that contains `shopsphere/` and `shopsphere-frontend/`). Paths in this document are relative to that root.
 
 ---
 
-## 2. Image workflow (build + load into Minikube)
+## 2. Image workflow (build and load, or Docker Hub)
 
-The app uses custom images for the frontend, gateway, and backend services. There are no pre-published images; you must build and load them.
+The application uses five custom images: frontend, gateway, auth-service, catalog-service, order-service. Postgres, Redis, and Solr use public images and do not need to be built.
 
-From the **repository root** run:
+**From the repository root:**
 
 ```bash
-# Build all app images (adjust path if your repo root is different)
+# Build
 docker build -t shopsphere-frontend:latest    -f shopsphere-frontend/Dockerfile shopsphere-frontend
-docker build -t shopsphere-gateway:latest     -f shopsphere/gateway/Dockerfile shopsphere/gateway
+docker build -t shopsphere-gateway:latest      -f shopsphere/gateway/Dockerfile shopsphere/gateway
 docker build -t shopsphere-auth-service:latest    -f shopsphere/services/auth-service/Dockerfile shopsphere/services/auth-service
 docker build -t shopsphere-catalog-service:latest -f shopsphere/services/catalog-service/Dockerfile shopsphere/services/catalog-service
-docker build -t shopsphere-order-service:latest  -f shopsphere/services/order-service/Dockerfile shopsphere/services/order-service
+docker build -t shopsphere-order-service:latest   -f shopsphere/services/order-service/Dockerfile shopsphere/services/order-service
 
-# Load them into Minikube so the cluster can use them
+# Load into Minikube
 minikube image load shopsphere-frontend:latest
 minikube image load shopsphere-gateway:latest
 minikube image load shopsphere-auth-service:latest
@@ -41,304 +49,180 @@ minikube image load shopsphere-catalog-service:latest
 minikube image load shopsphere-order-service:latest
 ```
 
-Public images (postgres, redis, solr) are pulled by the cluster; no need to build or load them.
-
-### Image delivery (for grader / submission)
-
-The assignment requires a way for the professor to get the images used by the application. You can use either option below.
-
-**Option A – Build from repo and load into Minikube (no Docker Hub):**  
-Clone the repo, then from the **repository root** run the build and load commands in Section 2 above. The manifests use `imagePullPolicy: IfNotPresent` and image names like `shopsphere-gateway:latest`; after `minikube image load ...`, the cluster will use the local images. No registry needed.
-
-**Option B – Push to Docker Hub and pull:**  
-1. Tag and push (replace `YOUR_DOCKERHUB_USER` with your username):
-   ```bash
-   docker tag shopsphere-frontend:latest YOUR_DOCKERHUB_USER/shopsphere-frontend:latest
-   docker tag shopsphere-gateway:latest YOUR_DOCKERHUB_USER/shopsphere-gateway:latest
-   docker tag shopsphere-auth-service:latest YOUR_DOCKERHUB_USER/shopsphere-auth-service:latest
-   docker tag shopsphere-catalog-service:latest YOUR_DOCKERHUB_USER/shopsphere-catalog-service:latest
-   docker tag shopsphere-order-service:latest YOUR_DOCKERHUB_USER/shopsphere-order-service:latest
-   docker push YOUR_DOCKERHUB_USER/shopsphere-frontend:latest
-   docker push YOUR_DOCKERHUB_USER/shopsphere-gateway:latest
-   docker push YOUR_DOCKERHUB_USER/shopsphere-auth-service:latest
-   docker push YOUR_DOCKERHUB_USER/shopsphere-catalog-service:latest
-   docker push YOUR_DOCKERHUB_USER/shopsphere-order-service:latest
-   ```
-2. In the Deployment manifests under `k8s/05-backend/` and `k8s/06-frontend/`, change the `image:` field to `YOUR_DOCKERHUB_USER/shopsphere-<name>:latest` for each app image. Then the professor can run `kubectl apply -k ...` and the cluster will pull from Docker Hub (with valid credentials / public images).
+**Option B – Docker Hub:** Tag and push the five images to your Docker Hub account, then in `k8s/05-backend/` and `k8s/06-frontend/` set each Deployment’s `image:` to `YOUR_DOCKERHUB_USER/shopsphere-<name>:latest`. The cluster will pull them when the namespace is applied (ensure the cluster can pull from Docker Hub).
 
 ---
 
-## 3. Deploy with Kustomize (overlay + quota/HPA from k8s/)
+## 3. Deploy with Kustomize (recommended)
 
-From the **repository root**. All YAML lives in `k8s/` only; overlays add namespace + replicas. Apply the overlay, then quota and HPA from `k8s/02-quotas` and `k8s/07-autoscaling` with `-n <namespace>`.
+All YAML lives in `k8s/`. Overlays in `k8s-overlays/` add namespace and replicas only. After applying an overlay, apply quota (and optionally LimitRange, HPA, VPA) from `k8s/` with the correct `-n <namespace>`.
 
-**Dev (no HPA):**
+### Dev (1 replica, quota 1 CPU / 2Gi, no HPA, no VPA)
+
 ```bash
 kubectl apply -k shopsphere/k8s-overlays/dev
 kubectl apply -n dev -f shopsphere/k8s/02-quotas/quota-dev.yaml -f shopsphere/k8s/02-quotas/limitrange-dev.yaml
 ```
 
-**Staging (replicas=3 + quota + HPA):**
+### Staging (3 replicas, quota 4 CPU / 8Gi, HPA, optional VPA)
+
 ```bash
 kubectl apply -k shopsphere/k8s-overlays/staging
 kubectl apply -n staging -f shopsphere/k8s/02-quotas/quota-staging.yaml
 kubectl apply -n staging -f shopsphere/k8s/07-autoscaling/
+# Optional, if VPA is installed:
+kubectl apply -n staging -f shopsphere/k8s/08-autoscaling/vpa-staging.yaml
 ```
 
-**Prod (replicas=3 + HPA, no quota):**
+### Prod (3 replicas, no quota, HPA, optional VPA)
+
 ```bash
 kubectl apply -k shopsphere/k8s-overlays/prod
 kubectl apply -n prod -f shopsphere/k8s/07-autoscaling/
-```
-
-**Optional – VPA (recommendation mode, staging/prod):**  
-If the VPA CRD and controller are installed on your cluster, apply the VPA manifests after the overlay and HPA:
-
-```bash
-# Staging
-kubectl apply -n staging -f shopsphere/k8s/08-autoscaling/vpa-staging.yaml
-
-# Prod
+# Optional, if VPA is installed:
 kubectl apply -n prod -f shopsphere/k8s/08-autoscaling/vpa-production.yaml
 ```
 
-Then check recommendations: `kubectl get vpa -n staging` and `kubectl describe vpa gateway-vpa -n staging`. VPA is in recommendation-only mode (`updateMode: Off`); it does not change pod resources automatically.
-
 **Layout:**
 
-- **`shopsphere/k8s/`** – Single source: `01-config/`, `02-quotas/`, `03-pods/`, `04-databases/`, `05-backend/`, `06-frontend/`, `07-autoscaling/`, `08-autoscaling/`. No duplicate YAML elsewhere.
-- **`shopsphere/k8s-overlays/`** – Only `kustomization.yaml` + `namespace.yaml` per env; references `../../k8s`. Staging/prod set **replicas=3** for all Deployments. Quota and HPA are applied from `k8s/` with `-n` (above).
+- **`shopsphere/k8s/`** – Base: `01-config/`, `02-quotas/`, `03-pods/`, `04-databases/`, `05-backend/`, `06-frontend/`, `07-autoscaling/`, `08-autoscaling/`, `kustomization.yaml`. Diagram: `architecture-diagram.drawio` (and optionally `.png`).
+- **`shopsphere/k8s-overlays/`** – One folder per env (`dev`, `staging`, `prod`). Each has `kustomization.yaml` and `namespace.yaml` and references `../../k8s`. Staging and prod set **replicas=3** for all six Deployments.
 
-Ensure images are built and loaded (Section 2) before applying. For staging/prod, enable metrics-server so HPA can scale.
+Ensure images are built and loaded (Section 2) before applying. For staging/prod, enable metrics-server so HPA can read CPU metrics.
 
 ---
 
-## 4. Apply manually (alternative)
+## 4. Verification (run before submission)
 
-If you prefer not to use Kustomize, run the following from the **repository root** per namespace. Do **not** apply HPA or VPA in **dev**.
+Run these from the repository root. Replace `<ns>` with `dev`, `staging`, or `prod` as applicable.
 
-### 4.1 Create namespaces (once)
-
+**Namespaces:**
 ```bash
-kubectl apply -f shopsphere/k8s/00-namespaces.yaml
+kubectl get ns
+# Expect: dev, staging, prod
 ```
 
-### 4.2 Development (`dev`) – no HPA, no VPA
-
+**Dev quota (1 CPU, 2Gi):**
 ```bash
-# Config and quotas
-kubectl apply -n dev -f shopsphere/k8s/01-config/configmap.yaml
-kubectl apply -n dev -f shopsphere/k8s/01-config/secrets.yaml
-kubectl apply -n dev -f shopsphere/k8s/02-quotas/quota-dev.yaml
-kubectl apply -n dev -f shopsphere/k8s/02-quotas/limitrange-dev.yaml
-
-# Databases (StatefulSets + Services)
-kubectl apply -n dev -f shopsphere/k8s/04-databases/auth-db.yaml
-kubectl apply -n dev -f shopsphere/k8s/04-databases/catalog-db.yaml
-kubectl apply -n dev -f shopsphere/k8s/04-databases/order-db.yaml
-
-# Backend (Deployments + Services)
-kubectl apply -n dev -f shopsphere/k8s/05-backend/redis.yaml
-kubectl apply -n dev -f shopsphere/k8s/05-backend/solr.yaml
-kubectl apply -n dev -f shopsphere/k8s/05-backend/gateway.yaml
-kubectl apply -n dev -f shopsphere/k8s/05-backend/auth-service.yaml
-kubectl apply -n dev -f shopsphere/k8s/05-backend/catalog-service.yaml
-kubectl apply -n dev -f shopsphere/k8s/05-backend/order-service.yaml
-
-# Frontend
-kubectl apply -n dev -f shopsphere/k8s/06-frontend/shopsphere-frontend.yaml
-
-# Optional: standalone Pod for testing (rubric "Pods" object)
-kubectl apply -n dev -f shopsphere/k8s/03-pods/debug-pod.yaml
-
-# Do NOT apply anything from 07-autoscaling/ or 08-autoscaling/ in dev.
+kubectl describe resourcequota dev-quota -n dev
+# Hard: limits.cpu "1", limits.memory 2Gi. Used must be ≤ Hard.
 ```
 
-### 4.3 Staging (`staging`) – with HPA, optional VPA
-
+**Staging quota (4 CPU, 8Gi):**
 ```bash
-# Config and quota (no LimitRange for staging)
-kubectl apply -n staging -f shopsphere/k8s/01-config/configmap.yaml
-kubectl apply -n staging -f shopsphere/k8s/01-config/secrets.yaml
-kubectl apply -n staging -f shopsphere/k8s/02-quotas/quota-staging.yaml
-
-# Databases
-kubectl apply -n staging -f shopsphere/k8s/04-databases/auth-db.yaml
-kubectl apply -n staging -f shopsphere/k8s/04-databases/catalog-db.yaml
-kubectl apply -n staging -f shopsphere/k8s/04-databases/order-db.yaml
-
-# Backend
-kubectl apply -n staging -f shopsphere/k8s/05-backend/redis.yaml
-kubectl apply -n staging -f shopsphere/k8s/05-backend/solr.yaml
-kubectl apply -n staging -f shopsphere/k8s/05-backend/gateway.yaml
-kubectl apply -n staging -f shopsphere/k8s/05-backend/auth-service.yaml
-kubectl apply -n staging -f shopsphere/k8s/05-backend/catalog-service.yaml
-kubectl apply -n staging -f shopsphere/k8s/05-backend/order-service.yaml
-
-# Frontend
-kubectl apply -n staging -f shopsphere/k8s/06-frontend/shopsphere-frontend.yaml
-
-# HPA (required for staging)
-kubectl apply -n staging -f shopsphere/k8s/07-autoscaling/hpa-gateway.yaml
-kubectl apply -n staging -f shopsphere/k8s/07-autoscaling/hpa-auth-service.yaml
-kubectl apply -n staging -f shopsphere/k8s/07-autoscaling/hpa-catalog-service.yaml
-kubectl apply -n staging -f shopsphere/k8s/07-autoscaling/hpa-order-service.yaml
-
-# Optional: debug pod for testing
-kubectl apply -n staging -f shopsphere/k8s/03-pods/debug-pod.yaml
-
-# VPA (optional – only if VPA is installed on the cluster)
-# kubectl apply -n staging -f shopsphere/k8s/08-autoscaling/vpa-staging.yaml
+kubectl describe resourcequota staging-quota -n staging
+# Hard: limits.cpu "4", limits.memory 8Gi.
 ```
 
-### 4.4 Production (`prod`) – with HPA, no quota, optional VPA
-
+**Prod has no quota:**
 ```bash
-# Config only (no quota for prod)
-kubectl apply -n prod -f shopsphere/k8s/01-config/configmap.yaml
-kubectl apply -n prod -f shopsphere/k8s/01-config/secrets.yaml
+kubectl get resourcequota -n prod
+# Should be empty (no ResourceQuota objects).
+```
 
-# Databases
-kubectl apply -n prod -f shopsphere/k8s/04-databases/auth-db.yaml
-kubectl apply -n prod -f shopsphere/k8s/04-databases/catalog-db.yaml
-kubectl apply -n prod -f shopsphere/k8s/04-databases/order-db.yaml
+**Pods and Deployments:**
+```bash
+kubectl get pods -n dev
+kubectl get deployments -n dev
+# Dev: 1 replica per Deployment. All pods should reach Running (or debug-curl Completed if restartPolicy: Never).
+kubectl get deployments -n staging
+kubectl get deployments -n prod
+# Staging and prod: 3 replicas per Deployment (gateway, auth-service, catalog-service, order-service, redis, shopsphere-frontend).
+```
 
-# Backend
-kubectl apply -n prod -f shopsphere/k8s/05-backend/redis.yaml
-kubectl apply -n prod -f shopsphere/k8s/05-backend/solr.yaml
-kubectl apply -n prod -f shopsphere/k8s/05-backend/gateway.yaml
-kubectl apply -n prod -f shopsphere/k8s/05-backend/auth-service.yaml
-kubectl apply -n prod -f shopsphere/k8s/05-backend/catalog-service.yaml
-kubectl apply -n prod -f shopsphere/k8s/05-backend/order-service.yaml
+**HPA (staging and prod only):**
+```bash
+kubectl get hpa -n staging
+kubectl get hpa -n prod
+# Expect four HPAs: gateway, auth-service, catalog-service, order-service. After metrics-server is ready, current CPU % should not be "unknown".
+# Dev must have no HPA: kubectl get hpa -n dev  → no resources.
+```
 
-# Frontend
-kubectl apply -n prod -f shopsphere/k8s/06-frontend/shopsphere-frontend.yaml
+**VPA – recommendation mode (if VPA is applied):**
+```bash
+kubectl get vpa -n staging
+kubectl describe vpa gateway-vpa -n staging
+# Must show updatePolicy.updateMode: Off (recommendation only). Recommendation block may appear after the recommender runs.
+```
 
-# HPA
-kubectl apply -n prod -f shopsphere/k8s/07-autoscaling/hpa-gateway.yaml
-kubectl apply -n prod -f shopsphere/k8s/07-autoscaling/hpa-auth-service.yaml
-kubectl apply -n prod -f shopsphere/k8s/07-autoscaling/hpa-catalog-service.yaml
-kubectl apply -n prod -f shopsphere/k8s/07-autoscaling/hpa-order-service.yaml
+**PVCs (Bound):**
+```bash
+kubectl get pvc -n dev
+# Expect PVCs for auth-db, catalog-db, order-db, solr; status Bound.
+```
 
-# Optional: debug pod for testing
-kubectl apply -n prod -f shopsphere/k8s/03-pods/debug-pod.yaml
+**Inter-service communication (from debug-curl pod):**
+```bash
+kubectl exec -it debug-curl -n dev -- curl -s http://gateway:4000/health
+# Expect HTTP 200 or a healthy JSON response.
+```
 
-# VPA (optional)
-# kubectl apply -n prod -f shopsphere/k8s/08-autoscaling/vpa-production.yaml
+**Frontend in browser:**
+```bash
+minikube service shopsphere-frontend -n dev
+# Open the URL; frontend → gateway → services flow should work.
 ```
 
 ---
 
-## 5. Accessing the app and quick tests
+## 5. Accessing the app and debug pod
 
-### Standalone Pod (debug-curl) – testing internal services
-
-The rubric requires using a **Pod** object. We provide a standalone Pod `debug-curl` (see `shopsphere/k8s/03-pods/debug-pod.yaml`) that runs a curl image so you can test internal Services from inside the cluster.
-
-**Apply** (to the namespace you use for testing, e.g. dev):
-
-```bash
-kubectl apply -n dev -f shopsphere/k8s/03-pods/debug-pod.yaml
-```
-
-**Wait until the pod is Ready** (required before `kubectl exec`; otherwise you get "container not found"):
-
-```bash
-kubectl wait --for=condition=Ready pod/debug-curl -n dev --timeout=60s
-# Or poll: kubectl get pod debug-curl -n dev   (wait until READY shows 1/1)
-```
-
-**Use it to curl internal services** (gateway, auth, catalog, order are ClusterIP; from inside the cluster use the Service name and port). Each service exposes `/health` (expect **200**):
-
-```bash
-# Gateway (port 4000)
-kubectl exec -it debug-curl -n dev -- curl -s -o /dev/null -w "%{http_code}\n" http://gateway:4000/health
-
-# Auth service (port 3001)
-kubectl exec -it debug-curl -n dev -- curl -s -o /dev/null -w "%{http_code}\n" http://auth-service:3001/health
-
-# Catalog service (port 3002)
-kubectl exec -it debug-curl -n dev -- curl -s -o /dev/null -w "%{http_code}\n" http://catalog-service:3002/health
-
-# Order service (port 3003)
-kubectl exec -it debug-curl -n dev -- curl -s -o /dev/null -w "%{http_code}\n" http://order-service:3003/health
-```
-
-Replace `dev` with `staging` or `prod` if you applied the pod there. To see the response body (e.g. `{"status":"ok","service":"catalog-service"}`), use e.g. `curl -s http://gateway:4000/health` without the `-o /dev/null -w` flags.
-
-### Open the app in the browser (dev)
-
+**Open frontend (dev):**
 ```bash
 minikube service shopsphere-frontend -n dev
 ```
 
-Use the URL that opens (or the one printed in the terminal). The frontend talks to the gateway inside the cluster.
-
-### Quick API check (gateway in dev)
-
+**Use debug-curl pod (applied with the overlay):**
 ```bash
-# Get gateway ClusterIP (or use port-forward)
-kubectl get svc gateway -n dev
-
-# Port-forward and curl (run in a separate terminal if you keep it open)
-kubectl port-forward -n dev svc/gateway 4000:4000
-# Then: curl -s http://localhost:4000/health  (or the health path your gateway exposes)
+kubectl exec -it debug-curl -n dev -- curl -s http://gateway:4000/health
+kubectl exec -it debug-curl -n dev -- curl -s http://auth-service:3001/health
+kubectl exec -it debug-curl -n dev -- curl -s http://catalog-service:3002/health
+kubectl exec -it debug-curl -n dev -- curl -s http://order-service:3003/health
 ```
-
-### Verify workloads (dev)
-
-```bash
-kubectl get pods -n dev
-kubectl get svc -n dev
-```
-
-All pods should be `Running` and `Ready` (e.g. `1/1`) once DBs and services have started. If any pod is `ImagePullBackOff`, see [Troubleshooting](#6-troubleshooting).
 
 ---
 
 ## 6. Troubleshooting
 
-### ImagePullBackOff / ErrImagePull
+**ImagePullBackOff:** Build and load the five app images (Section 2), or use Docker Hub and set `image:` in the manifests. Image names in YAML must match (e.g. `shopsphere-gateway:latest`).
 
-- **Cause:** The cluster cannot pull the image (e.g. custom images only exist locally).
-- **Fix:** Build the images and load them into Minikube (see [Section 2](#2-image-workflow-build--load-into-minikube)). Use the same image names and tags as in the YAML (`shopsphere-frontend:latest`, `shopsphere-gateway:latest`, etc.).
+**VPA apply fails – "no matches for kind VerticalPodAutoscaler":** Install the VPA CRD and controller, or do not apply any files in `08-autoscaling/`. The app runs without VPA.
 
-### VPA: "no matches for kind VerticalPodAutoscaler"
+**HPA shows "unknown" for current metrics:** Enable metrics-server: `minikube addons enable metrics-server`. Wait one to two minutes, then check `kubectl get hpa -n staging` again.
 
-- **Cause:** The VPA CRD and controller are not installed.
-- **Fix:** Either install VPA (e.g. from the [Kubernetes VPA repo](https://github.com/kubernetes/autoscaler/tree/master/vertical-pod-autoscaler)), or do **not** apply any files from `08-autoscaling/`. The app runs without VPA; VPA is only for recommendations.
+**Pods Pending in dev (quota exceeded):** Run `kubectl describe resourcequota dev-quota -n dev`. If Used exceeds Hard, the total container limits in dev exceed 1 CPU or 2Gi. All manifests in `k8s/` are already sized to fit; do not add extra replicas or higher limits in dev without adjusting the quota or limits.
 
-### HPA shows "unknown" for current metrics / scaling not working
+**PVCs stuck Pending:** Ensure the cluster has a default StorageClass (`kubectl get storageclass`). The manifests do not set `storageClassName`, so the default is used. Create or set a default StorageClass if none exists.
 
-- **Cause:** Metrics Server is not installed or not ready.
-- **Fix:** Enable the Minikube addon: `minikube addons enable metrics-server`. Wait a minute, then run `kubectl get hpa -n staging` again.
-
-### Pods stuck in Pending (dev)
-
-- **Cause:** Resource quota or insufficient cluster resources.
-- **Fix:** Check quota: `kubectl describe resourcequota -n dev`. If you hit the dev quota, either reduce the number of replicas or temporarily raise the quota in `02-quotas/quota-dev.yaml` and re-apply.
-
-### DB pods in CrashLoopBackOff (readiness/liveness probe timeouts)
-
-- **Cause:** Under load, Postgres can respond slowly and exceed the probe timeout.
-- **Fix:** The DB manifests in `04-databases/` use relaxed probes (`timeoutSeconds: 5`, longer `initialDelaySeconds`). If problems persist, ensure the cluster has enough CPU/memory for the DB pods.
+**CrashLoopBackOff:** Check `kubectl logs -n <ns> deployment/<name>` (or the failing pod). Ensure ConfigMap `shopsphere-config` and Secret `shopsphere-secrets` exist in the namespace and that keys match the env references in the manifests.
 
 ---
 
-## 7. Checklist and screenshots (for grading / presentation)
+## 7. Manual apply (without Kustomize)
 
-After applying **dev** and loading images:
+If you do not use Kustomize, create namespaces, then apply resources in order. **Do not apply HPA or VPA in dev.** For staging and prod you must scale Deployments to 3 replicas (e.g. `kubectl scale deployment gateway -n staging --replicas=3` for each) or apply the same manifests and then scale.
 
-- [ ] `kubectl get ns` shows `dev`, `staging`, `prod`.
-- [ ] `kubectl get pods -n dev` shows all pods `Running` and ready (e.g. frontend, gateway, auth/catalog/order-service, redis, solr, auth-db, catalog-db, order-db).
-- [ ] `kubectl get svc -n dev` shows `shopsphere-frontend` (NodePort) and `gateway` (ClusterIP).
-- [ ] `minikube service shopsphere-frontend -n dev` opens the app in the browser.
-- [ ] Screenshot: browser showing the Shopsphere frontend (e.g. login or home).
-- [ ] Screenshot: `kubectl get pods -n dev` (all Running, including `debug-curl` if applied).
-- [ ] Screenshot: `kubectl get pod debug-curl -n dev` (standalone Pod for rubric).
-- [ ] **Kustomize:** `kubectl apply -k shopsphere/k8s-overlays/dev` then `kubectl get pods -n dev` (all Running).
-- [ ] Screenshot: `kubectl get hpa -n staging` (if staging is applied and metrics-server is on) showing HPAs and current metrics.
+**Namespaces (once):**
+```bash
+kubectl apply -f shopsphere/k8s/00-namespaces.yaml
+```
 
-Optional for VPA:
+**Dev:** Apply config, quota, limitrange, then databases, backend, frontend, then debug pod (see base `k8s/kustomization.yaml` for order). Do not apply `07-autoscaling/` or `08-autoscaling/` in dev.
 
-- [ ] Screenshot: `kubectl describe vpa <name> -n staging` showing recommendation output (if VPA is installed and applied).
+**Staging:** Apply config, quota-staging, databases, backend, frontend, then all of `07-autoscaling/`, then optionally `08-autoscaling/vpa-staging.yaml`. Scale each of the six Deployments to 3 replicas if using base YAML (replicas=1).
+
+**Prod:** Same as staging but omit quota; apply `07-autoscaling/` and optionally `08-autoscaling/vpa-production.yaml`; scale to 3 replicas if needed.
+
+---
+
+## 8. Presentation checklist
+
+- Show the architecture diagram (all components and relationships).
+- Show `kubectl get ns` and `kubectl get deployments -n dev` and `-n staging` (replicas 1 vs 3).
+- Show `kubectl describe resourcequota dev-quota -n dev` (1 CPU, 2Gi) and `kubectl get resourcequota -n prod` (empty).
+- Show `kubectl get hpa -n staging` (and current metrics when metrics-server is on).
+- Show `kubectl get vpa -n staging` and `kubectl describe vpa gateway-vpa -n staging` (updateMode: Off).
+- Show `kubectl get pvc -n dev` (Bound).
+- Demo: browser on frontend and/or `kubectl exec ... curl http://gateway:4000/health` from debug-curl.
+
+**Screenshots to prepare:** Diagram; `kubectl get ns`; `kubectl get pods -n dev` (all Running); `kubectl describe resourcequota dev-quota -n dev`; `kubectl get hpa -n staging`; `kubectl get vpa -n staging` (and describe for recommendation mode); `kubectl get pvc -n dev`; browser with frontend loaded.
